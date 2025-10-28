@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Omega V∞ CLOUD</title>
+  <style>
+    body {font-family: Tahoma; background:#000; color:#0f0; padding:20px; text-align:center;}
+    .card {background:#111; border:2px solid #0f0; padding:20px; margin:20px auto; max-width:500px; border-radius:15px;}
+    #log {max-height:60vh; overflow-y:auto; background:#000; border:1px solid #0f0; padding:15px; margin:20px auto; border-radius:10px; font-size:0.9em;}
+    .buy {color:#0f0; font-weight:bold;} .sell {color:#f55; font-weight:bold;}
+    .status {color:#0a0; font-weight:bold; margin:10px 0;}
+  </style>
+</head>
+<body>
+  <h1>Omega V∞ CLOUD</h1>
+  <div class="status" id="status">ربات ۲۴/۷ فعال است</div>
+  <div id="log" class="card"></div>
+
+  <script>
+    const log = (msg, type='') => {
+      const d = document.createElement('div');
+      d.innerHTML = `<small style="color:#888">${new Date().toLocaleTimeString('fa-IR')}</small> <span class="${type}">${msg}</span>`;
+      const logEl = document.getElementById('log');
+      logEl.prepend(d);
+      if (logEl.children.length > 100) logEl.removeChild(logEl.lastChild);
+    };
+
+    // کدهای تو داخل فایل — خودش می‌فرسته!
+    const TG_TOKEN = "8229664295:AAHwzrJ4nKbHYoNN2ju8WSFUdaOqOVlmAh4";
+    const TG_CHAT = "85026023";
+    const GMAIL_USER = "izaizai1985@gmail.com";
+    const GMAIL_PASS = "qifxnxnxvcnyflyw";
+
+    async function sendAlert(msg) {
+      // تلگرام
+      try { await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage?chat_id=${TG_CHAT}&text=${encodeURIComponent(msg)}&parse_mode=HTML`); }
+      catch(e) {}
+      // جیمیل
+      if (window.Email) {
+        try { await Email.send({Host:"smtp.gmail.com",Username:GMAIL_USER,Password:GMAIL_PASS,To:GMAIL_USER,From:GMAIL_USER,Subject:"Omega Alert",Body:msg}); }
+        catch(e) {}
+      }
+    }
+
+    const EXCHANGES = ['kucoin','gateio','mexc','coinex','bitget','okx','bybit'];
+
+    async function analyze(sym) {
+      for (let ex of EXCHANGES) {
+        try {
+          const url = {
+            kucoin: `https://api.kucoin.com/api/v1/market/candles?type=1hour&symbol=${sym.replace('/', '-')}`,
+            gateio: `https://api.gate.io/api4/v4/spot/candlesticks?currency_pair=${sym.replace('/', '_')}&interval=1h`,
+            mexc: `https://api.mexc.com/api/v3/klines?symbol=${sym.replace('/', '')}&interval=1h&limit=50`,
+            coinex: `https://api.coinex.com/v1/market/kline?market=${sym.replace('/', '')}&type=1h&limit=50`,
+            bitget: `https://api.bitget.com/api/spot/v1/market/candles?symbol=${sym.replace('/', '')}&period=1h&limit=50`,
+            okx: `https://www.okx.com/api/v5/market/candles?instId=${sym.replace('/', '-')}&bar=1H`,
+            bybit: `https://api.bybit.com/v5/market/kline?category=spot&symbol=${sym.replace('/', '')}&interval=60&limit=50`
+          }[ex];
+          const res = await fetch(url, {signal: AbortSignal.timeout(4000)});
+          if (!res.ok) continue;
+          const data = await res.json();
+          const klines = (data.data || data).slice(-50);
+          if (klines.length < 20) continue;
+          const closes = klines.map(k => parseFloat(k[4]));
+          const price = closes[closes.length-1];
+          const rsi = closes.length > 14 ? (function(c){
+            let up=0, down=0;
+            for(let i=c.length-14; i<c.length; i++){
+              const d = c[i] - c[i-1];
+              if(d>0) up+=d; else down-=d;
+            }
+            return 100 - (100 / (1 + (up/14)/(down/14||1)));
+          })(closes) : 50;
+          const sma20 = closes.slice(-20).reduce((a,b)=>a+b,0)/20;
+          const pred = 0.5 + (rsi/100 * 0.35 + (price/sma20) * 0.3 + Math.random()*0.1) * 0.9;
+          if (pred > 0.72) {
+            const dir = pred > 0.78 ? 'BUY' : 'SELL';
+            const atr = price * 0.0055;
+            const capital = 1000;
+            const leverage = pred > 0.85 ? 10 : 5;
+            const msg = `<b>سیگنال ${dir}</b>\n<code>${sym}</code>\nورود: <b>${price.toFixed(6)}</b>\nSL: <b>${(dir==='BUY'?price-atr:price+atr).toFixed(6)}</b>\nTP1: <b>${(dir==='BUY'?price+atr*1.6:price-atr*1.6).toFixed(6)}</b>\nTP2: <b>${(dir==='BUY'?price+atr*3.2:price-atr*3.2).toFixed(6)}</b>\nسرمایه: <b>$${capital}</b>\nلوریج: <b>${leverage}x</b>\nاعتماد: <b>${(pred*100).toFixed(1)}%</b>` + (pred > 0.85 ? "\n\nسیگنال بسیار معتبر — اقدام فوری!" : "");
+            log(msg.replace(/\n/g,'<br>'), dir.toLowerCase());
+            await sendAlert(msg);
+            return true;
+          }
+        } catch(e) {}
+      }
+      return false;
+    }
+
+    async function rotate() {
+      const scores = {};
+      for (let ex of EXCHANGES) {
+        try {
+          const url = {
+            kucoin: "https://api.kucoin.com/api/v1/market/allTickers",
+            gateio: "https://api.gate.io/api4/v4/spot/tickers",
+            mexc: "https://api.mexc.com/api/v3/ticker/24hr",
+            coinex: "https://api.coinex.com/v1/market/ticker/all",
+            bitget: "https://api.bitget.com/api/spot/v1/market/tickers",
+            okx: "https://www.okx.com/api/v5/market/tickers?instType=SPOT",
+            bybit: "https://api.bybit.com/v5/market/tickers?category=spot"
+          }[ex];
+          const res = await fetch(url, {signal: AbortSignal.timeout(5000)});
+          if (!res.ok) continue;
+          const data = await res.json();
+          const items = data.data || data.ticker || data;
+          for (let i of (Array.isArray(items)?items:Object.values(items))) {
+            let sym = (i.symbol || i.instId || i.s || '').replace('-','/').replace('_','/');
+            if (sym.includes('/USDT')) {
+              const vol = parseFloat(i.quoteVolume || i.vol || i.q || 0);
+              const price = parseFloat(i.lastPrice || i.last || i.c || 0);
+              const change = Math.abs(parseFloat(i.priceChangePercent || i.P || 0));
+              if (vol * price > 250000) scores[sym] = vol * price * (1 + change/100);
+            }
+          }
+        } catch(e) {}
+      }
+      return Object.keys(scores).sort((a,b)=>scores[b]-scores[a]).slice(0,50);
+    }
+
+    async function run() {
+      log('شروع اسکن ۷ صرافی...');
+      const syms = await rotate();
+      let count = 0;
+      for (let sym of syms) {
+        if (await analyze(sym)) count++;
+      }
+      log(count ? `${count} سیگنال ارسال شد` : 'بدون سیگنال قوی');
+    }
+
+    // 24/7 با Web Worker
+    const workerCode = `
+      self.onmessage = async () => {
+        while (true) {
+          await new Promise(r => setTimeout(r, 150000));
+          const res = await fetch(location.href);
+          const text = await res.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, 'text/html');
+          eval(doc.querySelector('script').innerText.split('run()')[0] + 'run();');
+        }
+      };
+    `;
+
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+    worker.postMessage('start');
+
+    // لود کتابخانه ایمیل
+    const s = document.createElement('script');
+    s.src = 'https://smtpjs.com/v3/smtp.js';
+    document.head.appendChild(s);
+
+    log('ربات ۲۴/۷ با کدهای داخلی فعال شد!', 'buy');
+    sendAlert('ربات Omega V∞ CLOUD ۲۴/۷ فعال شد');
+    run();
+    setInterval(run, 150000);
+  </script>
+</body>
+</html>
