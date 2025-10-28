@@ -1,0 +1,20 @@
+{
+  "name": "Omega V∞ CLOUD",
+  "short_name": "Omega",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#00ff00",
+  "icons": [
+    {
+      "src": "https://api.iconify.design/ic:outline-trending-up.svg?color=%2300ff00&width=192",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://api.iconify.design/ic:outline-trending-up.svg?color=%2300ff00&width=512",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
