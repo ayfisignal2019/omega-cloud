@@ -1,0 +1,17 @@
+{
+  "name": "omega-cloud",
+  "version": "1.0.0",
+  "description": "Omega V∞ Cloud Bot — Node.js version",
+  "main": "omega-bot.js",
+  "scripts": {
+    "start": "node omega-bot.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.9",
+    "nodemailer": "^6.9.4",
+    "abort-controller": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
